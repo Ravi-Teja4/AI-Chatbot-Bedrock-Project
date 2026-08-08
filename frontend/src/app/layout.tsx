@@ -1,21 +1,15 @@
 import type { Metadata, Viewport } from 'next';
-import { Geist, Geist_Mono } from 'next/font/google';
+import { Inter } from 'next/font/google';
 import { Providers } from '@/components/common/Providers';
 import './globals.css';
 
 /**
  * Font Configuration
- * Using Geist (Vercel's font) — clean, modern, and optimized for code interfaces.
- * CSS variables make fonts available to Tailwind via var(--font-geist-sans).
+ * Using Inter — clean, modern, and widely supported Google Font.
+ * CSS variables make fonts available to Tailwind via var(--font-sans).
  */
-const geistSans = Geist({
-  variable: '--font-geist-sans',
-  subsets: ['latin'],
-  display: 'swap',
-});
-
-const geistMono = Geist_Mono({
-  variable: '--font-geist-mono',
+const fontSans = Inter({
+  variable: '--font-sans',
   subsets: ['latin'],
   display: 'swap',
 });
@@ -72,7 +66,7 @@ export default function RootLayout({ children }: RootLayoutProps) {
      */
     <html lang="en" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} min-h-screen bg-background font-sans antialiased`}
+        className={`${fontSans.variable} min-h-screen bg-background font-sans antialiased`}
       >
         <Providers>{children}</Providers>
       </body>
