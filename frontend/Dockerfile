@@ -19,7 +19,7 @@ RUN npm install -g pnpm@9.7.1
 
 WORKDIR /app
 
-COPY package.json pnpm-workspace.yaml ./
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY shared/package.json ./shared/
 COPY frontend/package.json ./frontend/
 COPY backend/package.json ./backend/
