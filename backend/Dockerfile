@@ -18,7 +18,7 @@ WORKDIR /app
 
 # Copy workspace manifests first for layer caching.
 # pnpm install only re-runs when these files change.
-COPY package.json pnpm-workspace.yaml ./
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY shared/package.json ./shared/
 COPY backend/package.json ./backend/
 # Frontend package.json is needed for workspace resolution even though
@@ -43,7 +43,7 @@ COPY --from=deps /app/backend/node_modules ./backend/node_modules
 # Copy source code
 COPY shared/ ./shared/
 COPY backend/ ./backend/
-COPY package.json pnpm-workspace.yaml ./
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 
 # Build shared package first (backend depends on it)
 RUN pnpm --filter @ai-chat/shared build
@@ -63,7 +63,7 @@ RUN npm install -g pnpm@9.7.1
 WORKDIR /app
 
 # Copy workspace manifests for production install
-COPY package.json pnpm-workspace.yaml ./
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY shared/package.json ./shared/
 COPY backend/package.json ./backend/
 COPY frontend/package.json ./frontend/
