@@ -20,14 +20,16 @@ router.get(
   '/',
   validate(conversationIdParamSchema, 'params'),
   validate(listMessagesSchema, 'query'),
-  (req, res, next) => messageController.list(req as import('express').Request<import('express-serve-static-core').ParamsDictionary, any, any, import('express-serve-static-core').ParsedQs>, res, next),
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (req, res, next) => messageController.list(req as any, res, next),
 );
 
 router.post(
   '/',
   validate(conversationIdParamSchema, 'params'),
   validate(sendMessageSchema, 'body'),
-  (req, res, next) => messageController.send(req as import('express').Request<import('express-serve-static-core').ParamsDictionary, any, import('validators/message.validator').SendMessageInput, import('express-serve-static-core').ParsedQs>, res, next),
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (req, res, next) => messageController.send(req as any, res, next),
 );
 
 export default router;
