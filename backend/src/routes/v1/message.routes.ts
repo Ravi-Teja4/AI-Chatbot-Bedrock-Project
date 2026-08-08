@@ -5,7 +5,6 @@ import { requireAuth } from '@/middleware/auth.middleware';
 import {
   sendMessageSchema,
   listMessagesSchema,
-  conversationIdParamSchema as messageConversationIdParamSchema,
 } from '@/validators/message.validator';
 import { conversationIdParamSchema } from '@/validators/conversation.validator';
 
@@ -21,16 +20,14 @@ router.get(
   '/',
   validate(conversationIdParamSchema, 'params'),
   validate(listMessagesSchema, 'query'),
-  (req, res, next) =>
-    messageController.list(req as Parameters<typeof messageController.list>[0], res, next),
+  (req, res, next) => messageController.list(req as Parameters<typeof messageController.list>[0], res, next),
 );
 
 router.post(
   '/',
   validate(conversationIdParamSchema, 'params'),
   validate(sendMessageSchema, 'body'),
-  (req, res, next) =>
-    messageController.send(req as Parameters<typeof messageController.send>[0], res, next),
+  (req, res, next) => messageController.send(req as Parameters<typeof messageController.send>[0], res, next),
 );
 
 export default router;

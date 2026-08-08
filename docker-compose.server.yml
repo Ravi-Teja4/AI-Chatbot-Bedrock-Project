@@ -151,8 +151,7 @@ services:
       context: .
       dockerfile: frontend/Dockerfile
       args:
-        # This gets baked into the Next.js build at image build time.
-        # Set it to your EC2 public IP or domain before running docker compose build.
+        # Default to localhost for local builds. Override via --build-arg when building.
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:5000}
     image: ai-chat-frontend:local
     container_name: ai-chat-frontend
