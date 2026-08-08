@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type Router } from 'express';
 import { conversationController } from '@/controllers/conversation.controller';
 import { validate } from '@/middleware/validate.middleware';
 import { requireAuth } from '@/middleware/auth.middleware';
@@ -9,7 +9,7 @@ import {
   conversationIdParamSchema,
 } from '@/validators/conversation.validator';
 
-const router = Router();
+const router: Router = Router();
 
 /**
  * All conversation routes are protected by requireAuth.
