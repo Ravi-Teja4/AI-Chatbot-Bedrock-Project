@@ -1,6 +1,5 @@
-import type { NextConfig } from 'next';
-
-const nextConfig: NextConfig = {
+/** @type {import('next').NextConfig} */
+const nextConfig = {
   /**
    * Strict Mode — catches lifecycle issues and deprecated APIs early.
    * Keep enabled in production; it runs twice in dev for double-invoke detection.
