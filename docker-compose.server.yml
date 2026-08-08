@@ -1,0 +1,192 @@
+# =============================================================================
+# Docker Compose — Server Build (EC2 / any Linux server)
+# =============================================================================
+# Use this when you clone the repo directly on the server and build images there.
+# Unlike docker-compose.yml (dev), this file:
+#   - Builds images from source using the production Dockerfiles
+#   - Does NOT mount source volumes (code is baked into the image)
+#   - Uses production-appropriate settings (no LOG_PRETTY, restart: always)
+#   - Still includes DynamoDB Local (no AWS DynamoDB account needed)
+#
+# Usage:
+#   docker compose -f docker-compose.server.yml build
+#   docker compose -f docker-compose.server.yml up -d
+#   docker compose -f docker-compose.server.yml logs -f
+#   docker compose -f docker-compose.server.yml down
+#   docker compose -f docker-compose.server.yml pull && docker compose -f docker-compose.server.yml up -d  # update
+# =============================================================================
+
+name: ai-chat-platform
+
+services:
+
+  # ── DynamoDB Local ─────────────────────────────────────────────────────────
+  dynamodb:
+    image: amazon/dynamodb-local:latest
+    container_name: ai-chat-dynamodb
+    command: ["-jar", "DynamoDBLocal.jar", "-sharedDb", "-dbPath", "/data"]
+    ports:
+      - "127.0.0.1:8000:8000"   # Bind to localhost only — not exposed publicly
+    volumes:
+      - dynamodb_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8000/shell/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - ai-chat-network
+    restart: always
+
+  # ── DynamoDB Table Bootstrap ───────────────────────────────────────────────
+  dynamodb-init:
+    image: amazon/aws-cli:latest
+    container_name: ai-chat-dynamodb-init
+    depends_on:
+      dynamodb:
+        condition: service_healthy
+    environment:
+      AWS_ACCESS_KEY_ID: local
+      AWS_SECRET_ACCESS_KEY: local
+      AWS_DEFAULT_REGION: us-east-1
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo "Creating DynamoDB tables..."
+
+        aws dynamodb create-table \
+          --table-name aichat-conversations \
+          --attribute-definitions \
+            AttributeName=userId,AttributeType=S \
+            AttributeName=conversationId,AttributeType=S \
+            AttributeName=updatedAt,AttributeType=S \
+          --key-schema \
+            AttributeName=userId,KeyType=HASH \
+            AttributeName=conversationId,KeyType=RANGE \
+          --global-secondary-indexes '[{
+            "IndexName":"userId-updatedAt-index",
+            "KeySchema":[
+              {"AttributeName":"userId","KeyType":"HASH"},
+              {"AttributeName":"updatedAt","KeyType":"RANGE"}
+            ],
+            "Projection":{"ProjectionType":"ALL"},
+            "ProvisionedThroughput":{"ReadCapacityUnits":5,"WriteCapacityUnits":5}
+          }]' \
+          --provisioned-throughput ReadCapacityUnits=5,WriteCapacityUnits=5 \
+          --endpoint-url http://dynamodb:8000 \
+          --region us-east-1 2>/dev/null || echo "aichat-conversations already exists"
+
+        aws dynamodb create-table \
+          --table-name aichat-messages \
+          --attribute-definitions \
+            AttributeName=conversationId,AttributeType=S \
+            AttributeName=messageId,AttributeType=S \
+          --key-schema \
+            AttributeName=conversationId,KeyType=HASH \
+            AttributeName=messageId,KeyType=RANGE \
+          --provisioned-throughput ReadCapacityUnits=5,WriteCapacityUnits=5 \
+          --endpoint-url http://dynamodb:8000 \
+          --region us-east-1 2>/dev/null || echo "aichat-messages already exists"
+
+        aws dynamodb create-table \
+          --table-name aichat-settings \
+          --attribute-definitions \
+            AttributeName=userId,AttributeType=S \
+            AttributeName=settingKey,AttributeType=S \
+          --key-schema \
+            AttributeName=userId,KeyType=HASH \
+            AttributeName=settingKey,KeyType=RANGE \
+          --provisioned-throughput ReadCapacityUnits=5,WriteCapacityUnits=5 \
+          --endpoint-url http://dynamodb:8000 \
+          --region us-east-1 2>/dev/null || echo "aichat-settings already exists"
+
+        echo "All DynamoDB tables ready."
+    networks:
+      - ai-chat-network
+
+  # ── Backend ────────────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      # No target — builds all the way to the production 'runner' stage
+    image: ai-chat-backend:local
+    container_name: ai-chat-backend
+    ports:
+      - "5000:5000"
+    env_file:
+      - backend/.env
+    environment:
+      # These override .env values — always production settings on server
+      NODE_ENV: production
+      PORT: 5000
+      HOST: 0.0.0.0
+      DYNAMODB_ENDPOINT: http://dynamodb:8000
+      LOG_PRETTY: "false"
+      LOG_LEVEL: info
+    depends_on:
+      dynamodb:
+        condition: service_healthy
+      dynamodb-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:5000/api/v1/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    networks:
+      - ai-chat-network
+    restart: always
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  # ── Frontend ───────────────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        # This gets baked into the Next.js build at image build time.
+        # Set it to your EC2 public IP or domain before running docker compose build.
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:5000}
+    image: ai-chat-frontend:local
+    container_name: ai-chat-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      NEXT_TELEMETRY_DISABLED: "1"
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - ai-chat-network
+    restart: always
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+# ── Networks ───────────────────────────────────────────────────────────────────
+networks:
+  ai-chat-network:
+    driver: bridge
+
+# ── Volumes ────────────────────────────────────────────────────────────────────
+volumes:
+  dynamodb_data:
+    driver: local

@@ -1,0 +1,135 @@
+# =============================================================================
+# CI/CD Pipeline — Build, Push to ECR, Deploy to EC2
+# =============================================================================
+# Triggers: push to main branch
+#
+# Required GitHub Secrets:
+#   AWS_ACCESS_KEY_ID         — IAM user with ECR push permissions
+#   AWS_SECRET_ACCESS_KEY     — IAM user secret
+#   AWS_REGION                — e.g., us-east-1
+#   ECR_REGISTRY              — <account-id>.dkr.ecr.<region>.amazonaws.com
+#   EC2_HOST                  — EC2 public IP or hostname
+#   EC2_SSH_KEY               — Private SSH key for EC2 access
+#   EC2_USER                  — EC2 username (e.g., ec2-user)
+#   NEXT_PUBLIC_API_URL       — http://<EC2-IP>:5000 or https://api.yourdomain.com
+#
+# This workflow is a SKELETON — activate it by populating the secrets above.
+# =============================================================================
+
+name: Deploy to EC2
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:  # Allow manual trigger from GitHub Actions UI
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
+  IMAGE_TAG: ${{ github.sha }}
+
+jobs:
+  # ── Lint & Type Check ───────────────────────────────────────────────────────
+  quality:
+    name: Lint & Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.7.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type check
+        run: pnpm type-check
+
+      - name: Lint
+        run: pnpm lint
+
+  # ── Build & Push Docker Images ─────────────────────────────────────────────
+  build-and-push:
+    name: Build & Push to ECR
+    runs-on: ubuntu-latest
+    needs: quality
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push backend image
+        run: |
+          docker build \
+            --file backend/Dockerfile \
+            --tag $ECR_REGISTRY/ai-chat-backend:$IMAGE_TAG \
+            --tag $ECR_REGISTRY/ai-chat-backend:latest \
+            .
+          docker push $ECR_REGISTRY/ai-chat-backend:$IMAGE_TAG
+          docker push $ECR_REGISTRY/ai-chat-backend:latest
+
+      - name: Build and push frontend image
+        run: |
+          docker build \
+            --file frontend/Dockerfile \
+            --build-arg NEXT_PUBLIC_API_URL=${{ secrets.NEXT_PUBLIC_API_URL }} \
+            --tag $ECR_REGISTRY/ai-chat-frontend:$IMAGE_TAG \
+            --tag $ECR_REGISTRY/ai-chat-frontend:latest \
+            .
+          docker push $ECR_REGISTRY/ai-chat-frontend:$IMAGE_TAG
+          docker push $ECR_REGISTRY/ai-chat-frontend:latest
+
+  # ── Deploy to EC2 ───────────────────────────────────────────────────────────
+  deploy:
+    name: Deploy to EC2
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          envs: ECR_REGISTRY,IMAGE_TAG,AWS_REGION
+          script: |
+            # Authenticate with ECR
+            aws ecr get-login-password --region $AWS_REGION | \
+              docker login --username AWS --password-stdin $ECR_REGISTRY
+
+            # Pull latest images
+            docker pull $ECR_REGISTRY/ai-chat-backend:$IMAGE_TAG
+            docker pull $ECR_REGISTRY/ai-chat-frontend:$IMAGE_TAG
+
+            # Export image tag for docker compose
+            export REGISTRY=$ECR_REGISTRY
+            export IMAGE_TAG=$IMAGE_TAG
+
+            # Navigate to app directory
+            cd ~/ai-chat-platform
+
+            # Pull latest compose file
+            # (Alternatively, copy it as part of this SSH step)
+
+            # Restart containers with zero-downtime rolling update
+            docker compose -f docker-compose.prod.yml up -d --no-build
+
+            # Clean up dangling images
+            docker image prune -f

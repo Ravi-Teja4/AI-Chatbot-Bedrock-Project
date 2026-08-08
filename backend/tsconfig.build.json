@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    /* Override noEmit for production builds */
+    "noEmit": false,
+    "outDir": "./dist",
+
+    /* Relax unused checks for build — they should fail at lint stage, not build */
+    "noUnusedLocals": false,
+    "noUnusedParameters": false
+  },
+  "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.spec.ts"]
+}
