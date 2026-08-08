@@ -39,7 +39,7 @@ COPY --from=deps /app/frontend/node_modules ./frontend/node_modules
 
 COPY shared/ ./shared/
 COPY frontend/ ./frontend/
-COPY package.json pnpm-workspace.yaml ./
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 
 # Build shared types package first
 RUN pnpm --filter @ai-chat/shared build
@@ -52,6 +52,10 @@ ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 
 # Disable Next.js telemetry during CI/CD builds
 ENV NEXT_TELEMETRY_DISABLED=1
+
+# Verify config file exists and is readable before build
+RUN ls -la next.config.mjs
+RUN cat next.config.mjs
 
 # Build the Next.js application with standalone output
 RUN pnpm --filter @ai-chat/frontend build
