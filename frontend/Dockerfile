@@ -40,6 +40,7 @@ COPY --from=deps /app/frontend/node_modules ./frontend/node_modules
 COPY shared/ ./shared/
 COPY frontend/ ./frontend/
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
+COPY frontend/next.config.mjs ./
 
 # Build shared types package first
 RUN pnpm --filter @ai-chat/shared build
