@@ -183,7 +183,6 @@ function CodeBlock({ children, ...props }: React.HTMLAttributes<HTMLPreElement>)
   const [copied, setCopied] = useState(false);
 
   async function handleCopy() {
-    const codeEl = (props as { ref?: React.RefObject<HTMLPreElement> })?.ref;
     // Extract text content from children
     const text = extractText(children);
     const success = await copyToClipboard(text);
